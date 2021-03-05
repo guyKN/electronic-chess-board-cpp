@@ -7,4 +7,4 @@ set(CMAKE_CXX_FLAGS "-I/usr/local/include -L/usr/local/lib -lwiringPi")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 # aaa
-add_executable(chessBoard main.cpp Electronics.cpp LedThread.cpp LedThread.h)
+add_executable(chessBoard main.cpp Electronics.cpp LedThreadManager.cpp LedThreadManager.h)

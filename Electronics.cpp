@@ -4,7 +4,7 @@
 //todo: figure out delays
 
 #include "Electronics.h"
-#include "LedThread.h"
+#include "LedThreadManager.h"
 #include <wiringPi.h>
 #include <iostream>
 #include <cassert>
@@ -36,16 +36,17 @@ ShiftInRegister::ShiftInRegister(int clockPin, int serialInput, int enableSerial
 }
 
 uint8_t ShiftInRegister::read() const {
+    delayMicroseconds(150);
     digitalWrite(enableSerialPin, 0);
     digitalWrite(clockPin, 1);
     digitalWrite(clockPin, 0);
     digitalWrite(enableSerialPin, 1);
     uint8_t data = 0;
     for (int i = 0; i < 8; ++i) {
-        delay(1);
+//        delay(1);
         data |= digitalRead(serialInputPin) ? 1 << i : 0;
         digitalWrite(clockPin, 1);
-        delayMicroseconds(1000);
+        delayMicroseconds(150);
         digitalWrite(clockPin, 0);
     }
     digitalWrite(enableSerialPin, 0);
@@ -158,12 +159,13 @@ uint64_t BoardScanner::standardizeBoard(uint64_t board) {
 
 }
 
-[[noreturn]] void BoardScanner::scanLoop(LedThread *ledThread) {
+[[noreturn]] void BoardScanner::scanLoop(LedThreadManager *ledThread) {
     uint64_t prevBoard = scan();
     printBoard(prevBoard);
     if (ledThread != nullptr) {
-        ledThread->setLeds(prevBoard, 0);
+        ledThread->setLeds(prevBoard, prevBoard);
     }
+
     unsigned prevTime = millis();
     for(;;){
         uint64_t board = scan();
@@ -174,7 +176,7 @@ uint64_t BoardScanner::standardizeBoard(uint64_t board) {
             printBoard(board);
             std::cout << "\n";
             if (ledThread != nullptr) {
-                ledThread->setLeds(board, 0);
+                ledThread->setLeds(board, board);
             }
         }
         unsigned currentTime = millis();
@@ -203,7 +205,7 @@ void LedController::setLeds(uint64_t board) const {
 
     for (int i = 0; i < 8; ++i) {
         auto row = static_cast<uint8_t>(board>>(8*i));
-        if(row != 0xFF) {
+        if(row != 0xFF || board == 0xFFFFFFFFFFFFFFFF) {
             groundRegister.writeByte(row);
             delay(1); // todo: is it necessary to reduce the wait in order to also consider time spent writing to the shift Registers?
             //todo: go back to using refreshrate

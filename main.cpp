@@ -1,7 +1,7 @@
 #include <iostream>
 #include <wiringPi.h>
 #include "Electronics.h"
-#include "LedThread.h"
+#include "LedThreadManager.h"
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
@@ -22,10 +22,11 @@ int main() {
     ShiftInRegister shiftInRegister{29,28,27};
     BoardScanner boardScanner{shiftInRegister, outPins};
 
-    //LedThread ledThread = LedThread(ledController, 500);
+    LedThreadManager ledThread = LedThreadManager(ledController, 500);
 
-    std::cout << "newest version";
-    boardScanner.scanLoop(nullptr);
+    boardScanner.scanLoop(&ledThread);
+
+    return 0;
 
 // board   : 37, 35, 33, 31, 29, 27, 23, 21
 // wiringPi: 25, 24, 23, 22, 21, 30, 14, 13

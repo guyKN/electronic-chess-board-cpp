@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-class LedThread;
+class LedThreadManager;
 
 class ShiftInRegister {
 public:
@@ -51,7 +51,7 @@ public:
     BoardScanner(const ShiftInRegister &shiftInRegister, const int *outPins);
     uint64_t scan();
 
-    [[noreturn]] void scanLoop(LedThread *ledThread);
+    [[noreturn]] void scanLoop(LedThreadManager *ledThread);
 };
 
 class LedController{
