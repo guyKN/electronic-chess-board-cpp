@@ -19,7 +19,10 @@ private:
     static void printData(uint8_t data);
 public:
     ShiftInRegister(int clockPin, int serialInput, int enableSerial);
+    void init();
+    static ShiftInRegister scanGroundRegister();
     uint8_t read() const;
+    void cleanup() const;
     [[noreturn]] void readLoop() const;
 };
 
@@ -34,9 +37,13 @@ private:
 
 public:
     ShiftOutRegister(int masterReset, int dataClock, int storageClock, int dataOutput);
+    static ShiftOutRegister ledGroundRegister();
+    static ShiftOutRegister ledVoltageRegister();
+    void init() const;
     void reset() const;
     void writeBit(bool bit) const;
     void writeByte(uint8_t byte) const;
+    void cleanup() const;
 
 };
 class LedController;
@@ -44,22 +51,21 @@ class BoardScanner{
 public:
     const ShiftInRegister shiftInRegister;
     const int* outPins;
-private:
-    static uint64_t standardizeBoard(uint64_t board);
-
 public:
-    BoardScanner(const ShiftInRegister &shiftInRegister, const int *outPins);
-    uint64_t scan();
+    explicit BoardScanner(const ShiftInRegister &shiftInRegister, const int *outPins);
+    explicit BoardScanner(const ShiftInRegister & shiftInRegister);
+    void init() const;
+    uint64_t scan() const;
 
-    [[noreturn]] void scanLoop(LedThreadManager *ledThread);
+    [[noreturn]] void scanLoop(LedThreadManager *ledThread) const;
+
+    void cleanup();
 };
 
 class LedController{
 public:
     const ShiftOutRegister voltageRegister;
     const ShiftOutRegister groundRegister;
-private:
-    static uint64_t standardizeBoard(uint64_t board);
 public:
     LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister);
     void reset();
