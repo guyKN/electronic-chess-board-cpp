@@ -4,62 +4,35 @@
 
 #include "LedThreadManager.h"
 
-#include <utility>
 #include <wiringPi.h>
 #include <iostream>
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "EndlessLoop"
+//todo: ensure that timing is correct and avoid the problem with overflow
 
-PI_THREAD(ledThread) {
-    LedThreadManager *threadManager = LedThreadManager::instance;
-    unsigned int prevTime = millis();
-    int blinkState = 0;
-    for (;;) {
-        if (threadManager->shouldStop) {
-            break;
-        }
-        unsigned int currentTime = millis();
-        if (currentTime - prevTime > 500) {
-            prevTime = currentTime;
-            blinkState++;
-            blinkState %= 2;
-        }
-        uint64_t board = threadManager->ledData[blinkState];
-
-        threadManager->ledController.setLeds(board);
-    }
-    LedThreadManager::instance = nullptr;
-}
-
-#pragma clang diagnostic pop
-
-LedThreadManager *LedThreadManager::instance = nullptr;
-
-LedThreadManager::LedThreadManager(LedController ledController, unsigned blinkDelay) : ledController(
-        std::move(ledController)),
-                                                                                       blinkDelay(blinkDelay) {
-}
+LedThreadManager::LedThreadManager(LedController ledController) :
+        ledController(std::move(ledController)) {}
 
 void LedThreadManager::init() {
-    if (instance != nullptr) {
-        std::cout << "Error: trying to start multiple led threads. \n";
-        abort();
-    }
-    ledData[0] = 0;
-    ledData[1] = 0;
-    instance = this;
+    slowBlinkingLeds[0] = 0;
+    slowBlinkingLeds[1] = 0;
     temporaryLedVector.clear();
-    piThreadCreate(ledThread);
+    ledThread = std::thread(&LedThreadManager::threadLoop, this);
 }
 
 
-void LedThreadManager::setLeds(uint64_t blink1, uint64_t blink2) {
-    ledData[0] = blink1;
-    ledData[1] = blink2;
+void LedThreadManager::setSlowBlinkingLeds(uint64_t blink1, uint64_t blink2) {
+    slowBlinkingLeds[0] = blink1;
+    slowBlinkingLeds[1] = blink2;
 }
 
-void LedThreadManager::setTemporaryLeds(uint64_t leds, unsigned int duration) {
+void LedThreadManager::stopThread() {
+    if (!shouldStop) {
+        shouldStop = true;
+        ledThread.join();
+    }
+}
+
+void LedThreadManager::writeTempLeds(uint64_t leds, unsigned int duration) {
     unsigned endTime = millis() + duration;
     TemporaryLedData temporaryLedData{leds, endTime};
     piLock(threadingKey);
@@ -67,9 +40,10 @@ void LedThreadManager::setTemporaryLeds(uint64_t leds, unsigned int duration) {
     piUnlock(threadingKey);
 }
 
-void LedThreadManager::stopThread() {
-    shouldStop = true;
-    delay(20); //todo: find a better way to wait for thread to stop
+void LedThreadManager::clearTempLeds() {
+    piLock(threadingKey);
+    temporaryLedVector.clear();
+    piUnlock(threadingKey);
 }
 
 uint64_t LedThreadManager::getTemporaryLeds() {
@@ -80,7 +54,7 @@ uint64_t LedThreadManager::getTemporaryLeds() {
     // turn on any leds that are temporary turned on, and delete temoraryLedData for LEDs that have expired
     auto iterator = temporaryLedVector.begin();
     while (iterator != temporaryLedVector.end()) {
-        if (iterator->endTime <= time) {
+        if (iterator->endTime >= time) {
             temporaryLeds |= iterator->ledsToEnable;
             iterator++;
         } else {
@@ -88,9 +62,64 @@ uint64_t LedThreadManager::getTemporaryLeds() {
         }
     }
     piUnlock(threadingKey);
+    return temporaryLeds;
+}
+
+
+//todo: ensure equal brightness with blinking leds
+void LedThreadManager::threadLoop() {
+    unsigned int slowBlinkPrevTime = millis();
+    unsigned int fastBlinkPrevTime = millis();
+    int slowBlinkState = 0;
+    int fastBlinkState = 0;
+    for (;;) {
+        unsigned int currentTime = millis();
+        if (shouldStop) {
+            break;
+        }
+        if (shouldResetBlinkTimer) {
+            shouldResetBlinkTimer = false;
+            slowBlinkState = 0;
+            slowBlinkPrevTime = currentTime;
+
+            fastBlinkState = 0;
+            fastBlinkPrevTime = currentTime;
+        }
+        if (static_cast<unsigned>(currentTime - slowBlinkPrevTime) > slowBlinkDuration) {
+            slowBlinkPrevTime = currentTime;
+            slowBlinkState++;
+            slowBlinkState %= 2;
+        }
+        if (static_cast<unsigned>(currentTime - fastBlinkPrevTime) > fastBlinkDuration) {
+            fastBlinkPrevTime = currentTime;
+            fastBlinkState++;
+            fastBlinkState %= 2;
+        }
+
+        uint64_t leds =
+                constantLeds | slowBlinkingLeds[slowBlinkState] | fastBlinkingLeds[fastBlinkState] | getTemporaryLeds();
+        ledController.setLeds(leds);
+    }
+}
+
+void LedThreadManager::resetBlinkTimer() {
+    shouldResetBlinkTimer = true;
+}
+
+void LedThreadManager::setSlowBlinkDuration(unsigned int blinkDuration) {
+    this->slowBlinkDuration = blinkDuration;
+}
+
+void LedThreadManager::setConstantLeds(uint64_t constantLeds) {
+    this->constantLeds = constantLeds;
+}
+
+void LedThreadManager::setFastBlinkingLeds(uint64_t blink1, uint64_t blink2) {
+    this->fastBlinkingLeds[0] = blink1;
+    this->fastBlinkingLeds[1] = blink2;
 
 }
 
-void LedThreadManager::threadLoop() {
-
+void LedThreadManager::setFastBlinkDuration(unsigned blinkDuration) {
+    this->slowBlinkDuration = blinkDuration;
 }

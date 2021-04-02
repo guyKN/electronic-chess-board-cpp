@@ -5,7 +5,7 @@
 #include "PythonInterface.h"
 
 // todo: squares to replace: b5, h5, b6
-
+//todo: rename from "chessboard" to a better name
 namespace {
     std::ostream &printBoard(uint64_t bitboard, std::ostream &os = std::cout) {
         uint64_t squareMask = 1;
@@ -22,17 +22,17 @@ namespace {
 }
 
 
-int main() {
+[[noreturn]]int main() {
 
-    initGpio();
-    uint64_t prevBoard = readBoard();
-    writeLeds(prevBoard, prevBoard);
+    init();
+    uint64_t prevBoard = scanBoard();
+    setLeds(0xFF, 0xFF);
     for (;;) {
-        uint64_t board = readBoard();
+        uint64_t board = scanBoard();
         if (board != prevBoard) {
+            uint64_t difference = board ^ prevBoard;
+            setTempLeds(difference, 250);
             prevBoard = board;
-            printBoard(board);
-            writeLeds(board, board);
         }
     }
 }

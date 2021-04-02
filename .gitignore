@@ -1,0 +1,10 @@
+/python/
+/python-release/_chessboard.so
+/python-release/chessboard_wrap.cxx
+/python-release/chessboard_wrap.o
+/python-release/chessboard.py
+/python-release/Electronics.o
+/python-release/LedThreadManager.o
+/python-release/objdump.txt
+/python-release/PythonInterface.o
+/python-release/readLoop.py

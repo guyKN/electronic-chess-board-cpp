@@ -1,6 +1,6 @@
 //
 // Created by guykn on 3/2/2021.
-//
+// updated
 //todo: figure out delays
 
 #include "Electronics.h"
@@ -10,7 +10,8 @@
 #include <cassert>
 
 namespace {
-    const int standardOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
+    const int boardScannerOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
+
     std::ostream &printBoard(uint64_t bitboard, std::ostream &os = std::cout) {
         uint64_t squareMask = 1;
         os << "\n";
@@ -24,8 +25,6 @@ namespace {
         return os;
     }
 }
-
-
 
 uint64_t rotateBoard(uint64_t board) {
     uint64_t newBoard = 0;
@@ -62,7 +61,6 @@ uint8_t ShiftInRegister::read() const {
     digitalWrite(enableSerialPin, 1);
     uint8_t data = 0;
     for (int i = 0; i < 8; ++i) {
-//        delay(1);
         data |= digitalRead(serialInputPin) ? 1 << i : 0;
         digitalWrite(clockPin, 1);
         delayMicroseconds(150);
@@ -111,6 +109,13 @@ void ShiftInRegister::cleanup() const {
     pinMode(enableSerialPin, INPUT);
 }
 
+void ShiftInRegister::testPins(void (test)(int)) {
+    test(clockPin);
+    test(enableSerialPin);
+    pinMode(serialInputPin, OUTPUT); // for testing purposes only
+    test(serialInputPin);
+}
+
 
 ShiftOutRegister::ShiftOutRegister(const int masterReset, const int dataClock, const int storageClock,
                                    const int dataOutput) : dataClock(dataClock), storageClock(storageClock),
@@ -138,19 +143,19 @@ void ShiftOutRegister::reset() const {
         digitalWrite(masterReset, 1);
     } else {
         writeByte(0);
+        updateStorage();
     }
 }
 
-inline void ShiftOutRegister::updateStorage() const {
+void ShiftOutRegister::updateStorage() const {
     digitalWrite(storageClock, 1);
     digitalWrite(storageClock, 0);
 }
 
-inline void ShiftOutRegister::writeBit(bool bit) const {
+void ShiftOutRegister::writeBit(bool bit) const {
     digitalWrite(dataOutput, bit);
     digitalWrite(dataClock, 1);
     digitalWrite(dataClock, 0);
-    updateStorage();
 }
 
 void ShiftOutRegister::writeByte(uint8_t byte) const {
@@ -158,21 +163,20 @@ void ShiftOutRegister::writeByte(uint8_t byte) const {
         bool bit = static_cast<bool>(byte & (1 << i));
         writeBit(bit);
     }
-    updateStorage();
 }
 
 ShiftOutRegister ShiftOutRegister::ledGroundRegister() {
-    return ShiftOutRegister(-1,8,9,7);
+    return ShiftOutRegister(-1, 8, 9, 7);
 }
 
 ShiftOutRegister ShiftOutRegister::ledVoltageRegister() {
-    return ShiftOutRegister(-1,15,0,1);
+    return ShiftOutRegister(-1, 15, 0, 1);
 }
 
 void ShiftOutRegister::cleanup() const {
     reset();
 
-    if(masterReset != 0){
+    if (masterReset != 0) {
         digitalWrite(masterReset, 0);
         pinMode(masterReset, INPUT);
     }
@@ -187,10 +191,20 @@ void ShiftOutRegister::cleanup() const {
     pinMode(dataOutput, INPUT);
 }
 
+void ShiftOutRegister::testPins(void (*test)(int)) const {
+    if (masterReset != -1) {
+        test(masterReset);
+    }
+    test(dataOutput);
+    test(storageClock);
+    test(dataClock);
+}
+
 BoardScanner::BoardScanner(const ShiftInRegister &shiftInRegister, const int *outPins)
         : shiftInRegister(shiftInRegister), outPins(outPins) {}
 
-BoardScanner::BoardScanner(const ShiftInRegister &shiftInRegister):BoardScanner(shiftInRegister, standardOutPins) {}
+BoardScanner::BoardScanner(const ShiftInRegister &shiftInRegister) : BoardScanner(shiftInRegister,
+                                                                                  boardScannerOutPins) {}
 
 void BoardScanner::init() const {
     for (int i = 0; i < 8; ++i) {
@@ -216,7 +230,7 @@ uint64_t BoardScanner::scan() const {
     uint64_t prevBoard = scan();
     printBoard(prevBoard);
     if (ledThread != nullptr) {
-        ledThread->setLeds(prevBoard, 0);
+        ledThread->setSlowBlinkingLeds(prevBoard, 0);
     }
 
     unsigned prevTime = millis();
@@ -229,7 +243,7 @@ uint64_t BoardScanner::scan() const {
             printBoard(board);
             std::cout << "\n";
             if (ledThread != nullptr) {
-                ledThread->setLeds(board, 0);
+                ledThread->setSlowBlinkingLeds(board, 0);
             }
         }
         unsigned currentTime = millis();
@@ -241,39 +255,84 @@ uint64_t BoardScanner::scan() const {
 }
 
 void BoardScanner::cleanup() {
-    for (int i=0;i<8;++i){
+    for (int i = 0; i < 8; ++i) {
         digitalWrite(outPins[i], 0);
         pinMode(outPins[i], INPUT);
     }
 }
 
-LedController::LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister)
-        : voltageRegister(voltageRegister), groundRegister(groundRegister) {}
+void BoardScanner::testPins(void (test)(int)) const {
+    for (int i = 0; i < 8; ++i) {
+        test(outPins[i]);
+    }
+}
 
-inline void LedController::reset() {
+LedController::LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister,
+                             int patchPin,
+                             int patchIndex)
+        : voltageRegister(voltageRegister), groundRegister(groundRegister), patchPin(patchPin),
+          patchIndex(patchIndex) {}
+
+void LedController::reset() {
     voltageRegister.reset();
     groundRegister.reset();
 }
 
+uint8_t rearangeRow(uint8_t row) {
+    uint8_t ret = row & 0b11111001;
+    if (row & 2) {
+        ret |= 4;
+    }
+    if (row & 4) {
+        ret |= 2;
+    }
+    return ret;
+}
 
 void LedController::setLeds(uint64_t board) const {
     //todo: handle an empty board better
     board = ~rotateBoard(board);
-    voltageRegister.writeBit(1);
 
+    if (board == 0xFFFFFFFFFFFFFFFF){
+        voltageRegister.writeByte(0);
+        groundRegister.writeByte(0xFF);
+        groundRegister.updateStorage();
+        voltageRegister.updateStorage();
+        digitalWrite(patchPin, 1);
+        delay(8);
+        return;
+    }
+
+    voltageRegister.writeBit(1);
     for (int i = 0; i < 8; ++i) {
-        auto row = static_cast<uint8_t>(board >> (8 * i));
-        if (row != 0xFF || board == 0xFFFFFFFFFFFFFFFF) {
+        uint8_t row = rearangeRow(static_cast<uint8_t>(board >> (8 * i)));
+        if (row != 0xFF) {
+            digitalWrite(patchPin, 1);
             groundRegister.writeByte(row);
+            groundRegister.updateStorage();
+            voltageRegister.updateStorage();
+            digitalWrite(patchPin, row & (1 << patchIndex));
             delay(1); // todo: is it necessary to reduce the wait in order to also consider time spent writing to the shift Registers?
+            digitalWrite(patchPin, 1);
         }
         voltageRegister.writeBit(0);
     }
+    digitalWrite(patchPin, 1);
 }
 
 [[noreturn]] void LedController::ledLoop() const {
     for (;;) {
-//        setLeds(0x0102040810204080);
+//        setSlowBlinkingLeds(0x0102040810204080);
         setLeds(0x55AA55AA55AA55AA);
     }
+}
+
+void LedController::init() {
+    pinMode(patchPin, OUTPUT);
+    digitalWrite(patchPin, 1);
+}
+
+void LedController::cleanup() {
+    digitalWrite(patchPin, 0);
+    pinMode(patchPin, INPUT);
 }

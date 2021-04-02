@@ -14,55 +14,103 @@ namespace {
 
     ShiftOutRegister ledGroundRegister = ShiftOutRegister::ledGroundRegister();
     ShiftOutRegister ledVoltageRegister = ShiftOutRegister::ledVoltageRegister();
-    LedController ledController{ledVoltageRegister, ledGroundRegister};
-    LedThreadManager ledThreadManager = LedThreadManager(ledController, 500);
+    LedController ledController{ledVoltageRegister, ledGroundRegister, 2, 1};
+    LedThreadManager ledThreadManager = LedThreadManager(ledController);
 
     ShiftInRegister scanGroundRegister = ShiftInRegister::scanGroundRegister();
     BoardScanner boardScanner{scanGroundRegister};
 }
 
-void initGpio() {
-    if(!isInitialized) {
+void init() {
+    if (!isInitialized) {
         isInitialized = true;
         wiringPiSetup();
 
         ledGroundRegister.init();
-
         ledVoltageRegister.init();
+        ledController.init();
 
         ledThreadManager.init();
-
         scanGroundRegister.init();
         boardScanner.init();
 
-    } else{
+    } else {
         std::cout << "Waring: called init() multiple times" << std::endl;
     }
-
 }
 
-uint64_t readBoard() {
-    if(!isInitialized){
-        std::cout << "Must call init() before using readBoard()" << std::endl;
+void testIndividualPin(int pin){
+    std::cout << "testing pin: " << pin << "\n";
+    digitalWrite(pin, 1);
+};
+
+void testPins() {
+    ledGroundRegister.testPins(&testIndividualPin);
+    ledVoltageRegister.testPins(&testIndividualPin);
+    scanGroundRegister.testPins(&testIndividualPin);
+    boardScanner.testPins(&testIndividualPin);
+}
+
+uint64_t scanBoard() {
+    if (!isInitialized) {
+        std::cout << "Must call init() before using scanBoard()" << std::endl;
         abort();
     }
 
     return boardScanner.scan();
 }
 
-void writeLeds(uint64_t blink1, uint64_t blink2) {
-    if(!isInitialized){
-        std::cout << "Must call init() before using writeLeds()" << std::endl;
+void setLeds(uint64_t const_leds, uint64_t slow_blink_leds, uint64_t slow_blink_leds_2, uint64_t fast_blink_leds,
+             uint64_t fast_blink_leds_2, bool reset_blink_timer) {
+    if (!isInitialized) {
+        std::cout << "Must call init() before using setSlowBlinkingLeds()" << std::endl;
         abort();
     }
-    ledThreadManager.setLeds(blink1, blink2);
+
+
+    ledThreadManager.setConstantLeds(const_leds);
+    ledThreadManager.setSlowBlinkingLeds(slow_blink_leds, slow_blink_leds_2);
+    ledThreadManager.setFastBlinkingLeds(fast_blink_leds, fast_blink_leds_2);
+    if (reset_blink_timer) {
+        ledThreadManager.resetBlinkTimer();
+    }
 }
 
-void cleanupGpio() {
+void setSlowBlinkDuration(unsigned int blinkDuration) {
+    ledThreadManager.setSlowBlinkDuration(blinkDuration);
+}
+
+void setFastBlinkDuration(unsigned int blinkDuration) {
+    ledThreadManager.setFastBlinkDuration(blinkDuration);
+}
+
+void setTempLeds(uint64_t leds, unsigned int duration) {
+    ledThreadManager.writeTempLeds(leds, duration);
+}
+
+void clearTempLeds() {
+    ledThreadManager.clearTempLeds();
+}
+
+
+void resetBlinkTimer(){
+    ledThreadManager.resetBlinkTimer();
+}
+
+void cleanup() {
+    ledThreadManager.stopThread();
     ledGroundRegister.cleanup();
     ledVoltageRegister.cleanup();
     scanGroundRegister.cleanup();
     boardScanner.cleanup();
-    ledThreadManager.stopThread();
 }
 
+void voltageRegisterWriteByte(uint8_t byte) {
+    ledThreadManager.stopThread();
+    ledVoltageRegister.writeByte(byte);
+}
+void voltageRegisterWriteBit(bool bit){
+    std::cout << "updated";
+    ledThreadManager.stopThread();
+    digitalWrite(2, bit);
+}

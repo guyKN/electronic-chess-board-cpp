@@ -22,6 +22,7 @@ public:
     void init();
     static ShiftInRegister scanGroundRegister();
     uint8_t read() const;
+    void  testPins(void test(int));
     void cleanup() const;
     [[noreturn]] void readLoop() const;
 };
@@ -32,7 +33,7 @@ public:
     const int storageClock;
     const int dataOutput;
     const int masterReset;
-private:
+
     void updateStorage() const;
 
 public:
@@ -43,6 +44,7 @@ public:
     void reset() const;
     void writeBit(bool bit) const;
     void writeByte(uint8_t byte) const;
+    void testPins(void test(int)) const;
     void cleanup() const;
 
 };
@@ -57,6 +59,8 @@ public:
     void init() const;
     uint64_t scan() const;
 
+    void testPins(void test(int)) const;
+
     [[noreturn]] void scanLoop(LedThreadManager *ledThread) const;
 
     void cleanup();
@@ -66,10 +70,17 @@ class LedController{
 public:
     const ShiftOutRegister voltageRegister;
     const ShiftOutRegister groundRegister;
-public:
-    LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister);
-    void reset();
 
+    const int patchPin;
+    const int patchIndex;
+public:
+    LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister, int patchPin,
+                  int patchIndex);
+
+    void init();
+
+    void reset();
+    void cleanup();
     [[noreturn]] void ledLoop() const;
     void setLeds(uint64_t board) const;
 };
