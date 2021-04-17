@@ -13,15 +13,18 @@ void init();
 
 uint64_t scanBoard();
 
+
+uint64_t awaitBoardChange();
+
+
 void setLeds(uint64_t const_leds = 0,
              uint64_t slow_blink_leds = 0, uint64_t slow_blink_leds_2 = 0,
              uint64_t fast_blink_leds = 0, uint64_t fast_blink_leds_2 = 0,
              bool reset_blink_timer = false);
 
-void voltageRegisterWriteByte(uint8_t byte);
-void voltageRegisterWriteBit(bool bit);
-
 void testPins();
+
+void setLedRefreshRate(int refreshRate);
 
 void setSlowBlinkDuration(unsigned int blinkDuration);
 

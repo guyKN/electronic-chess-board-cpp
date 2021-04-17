@@ -9,8 +9,8 @@
 
 //todo: ensure that timing is correct and avoid the problem with overflow
 
-LedThreadManager::LedThreadManager(LedController ledController) :
-        ledController(std::move(ledController)) {}
+LedThreadManager::LedThreadManager(LedController &ledController) :
+        ledController(ledController) {}
 
 void LedThreadManager::init() {
     slowBlinkingLeds[0] = 0;
@@ -47,6 +47,7 @@ void LedThreadManager::clearTempLeds() {
 }
 
 uint64_t LedThreadManager::getTemporaryLeds() {
+    // if actually using this method, deal with overflow of millis() function after ~50 days
     unsigned time = millis();
     uint64_t temporaryLeds = 0;
     piLock(threadingKey);
@@ -72,6 +73,10 @@ void LedThreadManager::threadLoop() {
     unsigned int fastBlinkPrevTime = millis();
     int slowBlinkState = 0;
     int fastBlinkState = 0;
+
+    // when no leds are set to be turned on, we only need to call setLeds() once, and then the leds will stay off forever.
+    bool didEmptyLeds = false; // if this variable is true we have already set the leds to empty so we don't need to do that again.
+
     for (;;) {
         unsigned int currentTime = millis();
         if (shouldStop) {
@@ -89,6 +94,10 @@ void LedThreadManager::threadLoop() {
             slowBlinkPrevTime = currentTime;
             slowBlinkState++;
             slowBlinkState %= 2;
+
+            if (slowBlinkState == 0) {
+                printRefreshRateMisses();
+            }
         }
         if (static_cast<unsigned>(currentTime - fastBlinkPrevTime) > fastBlinkDuration) {
             fastBlinkPrevTime = currentTime;
@@ -98,7 +107,24 @@ void LedThreadManager::threadLoop() {
 
         uint64_t leds =
                 constantLeds | slowBlinkingLeds[slowBlinkState] | fastBlinkingLeds[fastBlinkState] | getTemporaryLeds();
+        if(leds == 0){
+            if (didEmptyLeds){
+                delay(8);
+                continue;
+            } else{
+                didEmptyLeds = true;
+            }
+        } else{
+            didEmptyLeds = false;
+        }
         ledController.setLeds(leds);
+    }
+}
+
+void LedThreadManager::printRefreshRateMisses() {
+    int numTimesMissedRefreshRate = ledController.countRefreshRateMisses();
+    if (numTimesMissedRefreshRate !=0){
+        std::cout << "Warning: Refresh Rate too high. Missed " << numTimesMissedRefreshRate << "times!" << std::endl;
     }
 }
 

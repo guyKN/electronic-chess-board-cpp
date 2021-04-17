@@ -15,10 +15,11 @@ namespace {
     ShiftOutRegister ledGroundRegister = ShiftOutRegister::ledGroundRegister();
     ShiftOutRegister ledVoltageRegister = ShiftOutRegister::ledVoltageRegister();
     LedController ledController{ledVoltageRegister, ledGroundRegister, 2, 1};
-    LedThreadManager ledThreadManager = LedThreadManager(ledController);
+    LedThreadManager ledThreadManager{ledController};
 
     ShiftInRegister scanGroundRegister = ShiftInRegister::scanGroundRegister();
     BoardScanner boardScanner{scanGroundRegister};
+    BoardChangeDetector boardChangeDetector{boardScanner};
 }
 
 void init() {
@@ -58,6 +59,15 @@ uint64_t scanBoard() {
     }
 
     return boardScanner.scan();
+}
+
+uint64_t awaitBoardChange() {
+    if (!isInitialized) {
+        std::cout << "Must call init() before using scanBoard()" << std::endl;
+        abort();
+    }
+
+    return boardChangeDetector.awaitBoardChange();
 }
 
 void setLeds(uint64_t const_leds, uint64_t slow_blink_leds, uint64_t slow_blink_leds_2, uint64_t fast_blink_leds,
@@ -105,12 +115,6 @@ void cleanup() {
     boardScanner.cleanup();
 }
 
-void voltageRegisterWriteByte(uint8_t byte) {
-    ledThreadManager.stopThread();
-    ledVoltageRegister.writeByte(byte);
-}
-void voltageRegisterWriteBit(bool bit){
-    std::cout << "updated";
-    ledThreadManager.stopThread();
-    digitalWrite(2, bit);
+void setLedRefreshRate(int refreshRate) {
+    ledController.setRefreshRate(refreshRate);
 }

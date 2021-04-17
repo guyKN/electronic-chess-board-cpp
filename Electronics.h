@@ -37,6 +37,7 @@ public:
     void updateStorage() const;
 
 public:
+
     ShiftOutRegister(int masterReset, int dataClock, int storageClock, int dataOutput);
     static ShiftOutRegister ledGroundRegister();
     static ShiftOutRegister ledVoltageRegister();
@@ -51,9 +52,14 @@ public:
 class LedController;
 class BoardScanner{
 public:
-    const ShiftInRegister shiftInRegister;
+    const ShiftInRegister& shiftInRegister;
     const int* outPins;
 public:
+    BoardScanner(const BoardScanner&) = delete;
+    BoardScanner(const BoardScanner&&) = delete;
+    BoardScanner& operator=(const BoardScanner&) = delete;
+    BoardScanner& operator=(const BoardScanner&&) = delete;
+
     explicit BoardScanner(const ShiftInRegister &shiftInRegister, const int *outPins);
     explicit BoardScanner(const ShiftInRegister & shiftInRegister);
     void init() const;
@@ -66,23 +72,48 @@ public:
     void cleanup();
 };
 
+class BoardChangeDetector{
+    const BoardScanner& boardScanner;
+    bool hasStarted = false;
+    uint64_t prevBoard = 0;
+public:
+    BoardChangeDetector(const BoardChangeDetector&) = delete;
+    BoardChangeDetector(const BoardChangeDetector&&) = delete;
+    BoardChangeDetector& operator=(const BoardChangeDetector&) = delete;
+    BoardChangeDetector& operator=(const BoardChangeDetector&&) = delete;
+
+    explicit BoardChangeDetector(const BoardScanner &boardScanner);
+    uint64_t awaitBoardChange();
+};
+
 class LedController{
 public:
-    const ShiftOutRegister voltageRegister;
-    const ShiftOutRegister groundRegister;
+    const ShiftOutRegister& voltageRegister;
+    const ShiftOutRegister& groundRegister;
 
     const int patchPin;
     const int patchIndex;
+
+private:
+    int microDelayBetweenRows = 1000;
+    int numTimesMissedRefreshRate = 0;
+    void onMissRefreshRate();
 public:
+    LedController(const LedController&) = delete;
+    LedController(const LedController&&) = delete;
+    LedController& operator=(const LedController&) = delete;
+    LedController& operator=(const LedController&&) = delete;
+
     LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister, int patchPin,
                   int patchIndex);
 
     void init();
-
     void reset();
-    void cleanup();
-    [[noreturn]] void ledLoop() const;
-    void setLeds(uint64_t board) const;
+    void setRefreshRate(int refreshRate);
+    int countRefreshRateMisses();
+    void cleanup() const;
+    void setLeds(uint64_t board);
+    [[noreturn]] void ledLoop();
 };
 
 #endif //CHESSBOARD_ELECTRONICS_H

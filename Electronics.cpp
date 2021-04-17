@@ -1,13 +1,11 @@
 //
 // Created by guykn on 3/2/2021.
 // updated
-//todo: figure out delays
 
 #include "Electronics.h"
 #include "LedThreadManager.h"
 #include <wiringPi.h>
 #include <iostream>
-#include <cassert>
 
 namespace {
     const int boardScannerOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
@@ -147,18 +145,18 @@ void ShiftOutRegister::reset() const {
     }
 }
 
-void ShiftOutRegister::updateStorage() const {
+inline void ShiftOutRegister::updateStorage() const {
     digitalWrite(storageClock, 1);
     digitalWrite(storageClock, 0);
 }
 
-void ShiftOutRegister::writeBit(bool bit) const {
+inline void ShiftOutRegister::writeBit(bool bit) const {
     digitalWrite(dataOutput, bit);
     digitalWrite(dataClock, 1);
     digitalWrite(dataClock, 0);
 }
 
-void ShiftOutRegister::writeByte(uint8_t byte) const {
+inline void ShiftOutRegister::writeByte(uint8_t byte) const {
     for (int i = 0; i < 8; i++) {
         bool bit = static_cast<bool>(byte & (1 << i));
         writeBit(bit);
@@ -267,6 +265,7 @@ void BoardScanner::testPins(void (test)(int)) const {
     }
 }
 
+
 LedController::LedController(const ShiftOutRegister &voltageRegister, const ShiftOutRegister &groundRegister,
                              int patchPin,
                              int patchIndex)
@@ -278,7 +277,7 @@ void LedController::reset() {
     groundRegister.reset();
 }
 
-uint8_t rearangeRow(uint8_t row) {
+uint8_t rearrangeRow(uint8_t row) {
     uint8_t ret = row & 0b11111001;
     if (row & 2) {
         ret |= 4;
@@ -289,11 +288,11 @@ uint8_t rearangeRow(uint8_t row) {
     return ret;
 }
 
-void LedController::setLeds(uint64_t board) const {
-    //todo: handle an empty board better
+void LedController::setLeds(uint64_t board) {
     board = ~rotateBoard(board);
 
     if (board == 0xFFFFFFFFFFFFFFFF){
+        // if the board is set to be completely empty, simply turn off all leds and wait 8 milliseconds
         voltageRegister.writeByte(0);
         groundRegister.writeByte(0xFF);
         groundRegister.updateStorage();
@@ -305,14 +304,24 @@ void LedController::setLeds(uint64_t board) const {
 
     voltageRegister.writeBit(1);
     for (int i = 0; i < 8; ++i) {
-        uint8_t row = rearangeRow(static_cast<uint8_t>(board >> (8 * i)));
+        uint8_t row = rearrangeRow(static_cast<uint8_t>(board >> (8 * i)));
         if (row != 0xFF) {
+            unsigned startTime = micros();
+
             digitalWrite(patchPin, 1);
             groundRegister.writeByte(row);
             groundRegister.updateStorage();
             voltageRegister.updateStorage();
             digitalWrite(patchPin, row & (1 << patchIndex));
-            delay(1); // todo: is it necessary to reduce the wait in order to also consider time spent writing to the shift Registers?
+
+            unsigned endTime = micros();
+            unsigned timeElapsed = endTime - startTime;
+            if (timeElapsed >= microDelayBetweenRows){
+                onMissRefreshRate();
+            } else {
+                delayMicroseconds(microDelayBetweenRows - timeElapsed);
+            }
+
             digitalWrite(patchPin, 1);
         }
         voltageRegister.writeBit(0);
@@ -320,9 +329,8 @@ void LedController::setLeds(uint64_t board) const {
     digitalWrite(patchPin, 1);
 }
 
-[[noreturn]] void LedController::ledLoop() const {
+[[noreturn]] void LedController::ledLoop() {
     for (;;) {
-//        setSlowBlinkingLeds(0x0102040810204080);
         setLeds(0x55AA55AA55AA55AA);
     }
 }
@@ -332,7 +340,40 @@ void LedController::init() {
     digitalWrite(patchPin, 1);
 }
 
-void LedController::cleanup() {
+void LedController::cleanup() const {
     digitalWrite(patchPin, 0);
     pinMode(patchPin, INPUT);
+}
+
+void LedController::setRefreshRate(int refreshRate) {
+    static int numRows = 8;
+    microDelayBetweenRows = 1000000/numRows/refreshRate;
+    std::cout << "microDelayBetweenRows: " << microDelayBetweenRows << std::endl;
+}
+
+void LedController::onMissRefreshRate() {
+    numTimesMissedRefreshRate++;
+}
+
+int LedController::countRefreshRateMisses() {
+    int temp = numTimesMissedRefreshRate;
+    numTimesMissedRefreshRate = 0;
+    return temp;
+}
+
+BoardChangeDetector::BoardChangeDetector(const BoardScanner &boardScanner) : boardScanner(boardScanner) {}
+
+uint64_t BoardChangeDetector::awaitBoardChange() {
+    if (!hasStarted){
+        hasStarted = true;
+        return boardScanner.scan();
+    }
+
+    for (;;){
+        uint64_t board = boardScanner.scan();
+        if (board != prevBoard){
+            prevBoard = board;
+            return board;
+        }
+    }
 }

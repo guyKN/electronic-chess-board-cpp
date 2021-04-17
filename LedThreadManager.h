@@ -14,7 +14,7 @@ class LedThreadManager {
 
     static const int threadingKey = 0;
 
-    LedController ledController;
+    LedController& ledController;
     uint64_t constantLeds = 0;
     uint64_t slowBlinkingLeds[2] = {0,0};
     uint64_t fastBlinkingLeds[2] = {0,0};
@@ -37,7 +37,12 @@ class LedThreadManager {
 
 
 public:
-    explicit LedThreadManager(LedController ledController);
+    LedThreadManager(const LedThreadManager&) = delete;
+    LedThreadManager(const LedThreadManager&&) = delete;
+    LedThreadManager& operator=(const LedThreadManager&) = delete;
+    LedThreadManager& operator=(const LedThreadManager&&) = delete;
+
+    explicit LedThreadManager(LedController &ledController);
 
     void init();
 
@@ -56,6 +61,8 @@ public:
     void clearTempLeds();
 
     void stopThread();
+
+    void printRefreshRateMisses();
 };
 
 
