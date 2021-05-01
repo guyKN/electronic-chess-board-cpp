@@ -118,3 +118,11 @@ void cleanup() {
 void setLedRefreshRate(int refreshRate) {
     ledController.setRefreshRate(refreshRate);
 }
+
+void setUseEqualBrightness(bool useEqualBrightness) {
+    ledThreadManager.setUseEqualBrightness(useEqualBrightness);
+}
+
+void setEqualBrightnessFactor(int equalBrightnessFactor) {
+    ledController.setEqualBrightnessFactor(equalBrightnessFactor);
+}

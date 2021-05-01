@@ -10,7 +10,10 @@
 //todo: ensure that timing is correct and avoid the problem with overflow
 
 LedThreadManager::LedThreadManager(LedController &ledController) :
-        ledController(ledController) {}
+        ledController(ledController) {
+    setSlowBlinkingLeds(0,0);
+    setFastBlinkingLeds(0,0);
+}
 
 void LedThreadManager::init() {
     slowBlinkingLeds[0] = 0;
@@ -105,9 +108,14 @@ void LedThreadManager::threadLoop() {
             fastBlinkState %= 2;
         }
 
-        uint64_t leds =
-                constantLeds | slowBlinkingLeds[slowBlinkState] | fastBlinkingLeds[fastBlinkState] | getTemporaryLeds();
-        if(leds == 0){
+        uint64_t temporaryLeds = getTemporaryLeds();
+        uint64_t currentLeds =
+                constantLeds | slowBlinkingLeds[slowBlinkState] | fastBlinkingLeds[fastBlinkState] | temporaryLeds;
+        uint64_t otherLeds =
+                constantLeds | slowBlinkingLeds[!slowBlinkState] | fastBlinkingLeds[!fastBlinkState] | temporaryLeds;
+
+
+        if(currentLeds == 0){
             if (didEmptyLeds){
                 delay(8);
                 continue;
@@ -117,7 +125,11 @@ void LedThreadManager::threadLoop() {
         } else{
             didEmptyLeds = false;
         }
-        ledController.setLeds(leds);
+
+        ledController.setLeds(currentLeds);
+        if (useEqualBrightness) {
+            ledController.makeLedsEqualBrightness(currentLeds, otherLeds);
+        }
     }
 }
 
@@ -143,9 +155,12 @@ void LedThreadManager::setConstantLeds(uint64_t constantLeds) {
 void LedThreadManager::setFastBlinkingLeds(uint64_t blink1, uint64_t blink2) {
     this->fastBlinkingLeds[0] = blink1;
     this->fastBlinkingLeds[1] = blink2;
-
 }
 
 void LedThreadManager::setFastBlinkDuration(unsigned blinkDuration) {
     this->slowBlinkDuration = blinkDuration;
+}
+
+void LedThreadManager::setUseEqualBrightness(bool useEqualBrightness) {
+    this->useEqualBrightness = useEqualBrightness;
 }

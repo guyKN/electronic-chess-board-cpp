@@ -51,5 +51,12 @@ extern void clearTempLeds();
 %nothread setLedRefreshRate;
 void setLedRefreshRate(int refreshRate);
 
+%nothread setUseEqualBrightness;
+void setUseEqualBrightness(bool useEqualBrightness);
+
+%nothread setEqualBrightnessFactor;
+void setEqualBrightnessFactor(int equalBrightnessFactor);
+
+
 %nothread cleanup;
 extern void cleanup();

@@ -8,6 +8,11 @@
 #include <iostream>
 
 namespace {
+
+    constexpr int NUM_COLS = 8;
+    constexpr int NUM_ROWS = 8;
+    constexpr int NUM_SQUARES = 64;
+
     const int boardScannerOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
 
     std::ostream &printBoard(uint64_t bitboard, std::ostream &os = std::cout) {
@@ -118,6 +123,7 @@ void ShiftInRegister::testPins(void (test)(int)) {
 ShiftOutRegister::ShiftOutRegister(const int masterReset, const int dataClock, const int storageClock,
                                    const int dataOutput) : dataClock(dataClock), storageClock(storageClock),
                                                            dataOutput(dataOutput), masterReset(masterReset) {}
+
 
 void ShiftOutRegister::init() const {
     pinMode(dataClock, OUTPUT);
@@ -291,7 +297,7 @@ uint8_t rearrangeRow(uint8_t row) {
 void LedController::setLeds(uint64_t board) {
     board = ~rotateBoard(board);
 
-    if (board == 0xFFFFFFFFFFFFFFFF){
+    if (board == 0xFFFFFFFFFFFFFFFF) {
         // if the board is set to be completely empty, simply turn off all leds and wait 8 milliseconds
         voltageRegister.writeByte(0);
         groundRegister.writeByte(0xFF);
@@ -316,7 +322,7 @@ void LedController::setLeds(uint64_t board) {
 
             unsigned endTime = micros();
             unsigned timeElapsed = endTime - startTime;
-            if (timeElapsed >= microDelayBetweenRows){
+            if (timeElapsed >= microDelayBetweenRows) {
                 onMissRefreshRate();
             } else {
                 delayMicroseconds(microDelayBetweenRows - timeElapsed);
@@ -326,6 +332,7 @@ void LedController::setLeds(uint64_t board) {
         }
         voltageRegister.writeBit(0);
     }
+    voltageRegister.reset();
     digitalWrite(patchPin, 1);
 }
 
@@ -346,8 +353,7 @@ void LedController::cleanup() const {
 }
 
 void LedController::setRefreshRate(int refreshRate) {
-    static int numRows = 8;
-    microDelayBetweenRows = 1000000/numRows/refreshRate;
+    microDelayBetweenRows = 1000000 / NUM_ROWS / refreshRate;
     std::cout << "microDelayBetweenRows: " << microDelayBetweenRows << std::endl;
 }
 
@@ -361,17 +367,50 @@ int LedController::countRefreshRateMisses() {
     return temp;
 }
 
+void LedController::makeLedsEqualBrightness(uint64_t currentLeds, uint64_t otherLeds) const {
+    int currentNumCols = numNonZeroColumns(currentLeds);
+    int otherNumCols = numNonZeroColumns(otherLeds);
+//    std::cout << "currentNumCols: " << currentNumCols << "      otherNumCols: " << otherNumCols;
+    if (currentNumCols < otherNumCols) {
+        int columnsDifference = otherNumCols - currentNumCols;
+        delayMicroseconds((columnsDifference * microDelayBetweenRows * equalBrightnessFactor) / 1000);
+//        std::cout << "     columnDifference: " << columnsDifference;
+//        std::cout << "     sleeping for: " << columnsDifference * microDelayBetweenRows;
+    }
+//    std::cout << std::endl;
+}
+
+int LedController::numNonZeroColumns(uint64_t board) {
+    int numActiveColumns = 0;
+    constexpr uint64_t COL_1_MASK = 0x0101010101010101;
+    uint64_t columnMask = COL_1_MASK;
+
+    for (int i = 0; i < NUM_COLS; ++i) {
+        if (board & columnMask) {
+            numActiveColumns++;
+        }
+        columnMask <<= 1;
+    }
+
+    return numActiveColumns;
+
+}
+
+void LedController::setEqualBrightnessFactor(int equalBrightnessFactor) {
+    this->equalBrightnessFactor = equalBrightnessFactor;
+}
+
 BoardChangeDetector::BoardChangeDetector(const BoardScanner &boardScanner) : boardScanner(boardScanner) {}
 
 uint64_t BoardChangeDetector::awaitBoardChange() {
-    if (!hasStarted){
+    if (!hasStarted) {
         hasStarted = true;
         return boardScanner.scan();
     }
 
-    for (;;){
+    for (;;) {
         uint64_t board = boardScanner.scan();
-        if (board != prevBoard){
+        if (board != prevBoard) {
             prevBoard = board;
             return board;
         }

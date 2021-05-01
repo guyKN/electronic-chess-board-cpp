@@ -30,6 +30,10 @@ void setSlowBlinkDuration(unsigned int blinkDuration);
 
 void setFastBlinkDuration(unsigned int blinkDuration);
 
+void setUseEqualBrightness(bool useEqualBrightness);
+
+void setEqualBrightnessFactor(int equalBrightnessFactor);
+
 void resetBlinkTimer();
 
 void setTempLeds(uint64_t leds, unsigned int duration);
