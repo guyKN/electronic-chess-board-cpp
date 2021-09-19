@@ -7,6 +7,11 @@
 
 #include <cstdint>
 
+namespace pins {
+    const extern int PATCH_PIN = 2;
+    const extern int PATCH_INDEX = 1;
+}
+
 class LedThreadManager;
 
 class ShiftInRegister {

@@ -14,7 +14,7 @@ namespace {
 
     ShiftOutRegister ledGroundRegister = ShiftOutRegister::ledGroundRegister();
     ShiftOutRegister ledVoltageRegister = ShiftOutRegister::ledVoltageRegister();
-    LedController ledController{ledVoltageRegister, ledGroundRegister, 2, 1};
+    LedController ledController{ledVoltageRegister, ledGroundRegister, pins::PATCH_PIN, pins::PATCH_INDEX};
     LedThreadManager ledThreadManager{ledController};
 
     ShiftInRegister scanGroundRegister = ShiftInRegister::scanGroundRegister();

@@ -7,13 +7,28 @@
 #include <wiringPi.h>
 #include <iostream>
 
+// Names of pins
+ShiftOutRegister ShiftOutRegister::ledGroundRegister() {
+    return ShiftOutRegister(-1, 8, 9, 7);
+}
+
+ShiftOutRegister ShiftOutRegister::ledVoltageRegister() {
+    return ShiftOutRegister(-1, 15, 0, 1);
+}
+
+ShiftInRegister ShiftInRegister::scanGroundRegister() {
+    return ShiftInRegister(29, 28, 27);
+}
+
+namespace {
+    const int boardScannerOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
+}
+
 namespace {
 
     constexpr int NUM_COLS = 8;
     constexpr int NUM_ROWS = 8;
     constexpr int NUM_SQUARES = 64;
-
-    const int boardScannerOutPins[8] = {25, 24, 23, 22, 21, 30, 14, 13};
 
     std::ostream &printBoard(uint64_t bitboard, std::ostream &os = std::cout) {
         uint64_t squareMask = 1;
@@ -52,7 +67,6 @@ void ShiftInRegister::init() {
     digitalWrite(enableSerialPin, 0);
 
     pinMode(serialInputPin, INPUT);
-
 }
 
 
@@ -97,10 +111,6 @@ void ShiftInRegister::printData(uint8_t data) {
         std::cout << ((data & (1 << i)) ? "1" : ".");
     }
     std::cout << "\n";
-}
-
-ShiftInRegister ShiftInRegister::scanGroundRegister() {
-    return ShiftInRegister(29, 28, 27);
 }
 
 void ShiftInRegister::cleanup() const {
@@ -169,13 +179,6 @@ inline void ShiftOutRegister::writeByte(uint8_t byte) const {
     }
 }
 
-ShiftOutRegister ShiftOutRegister::ledGroundRegister() {
-    return ShiftOutRegister(-1, 8, 9, 7);
-}
-
-ShiftOutRegister ShiftOutRegister::ledVoltageRegister() {
-    return ShiftOutRegister(-1, 15, 0, 1);
-}
 
 void ShiftOutRegister::cleanup() const {
     reset();
